@@ -1,0 +1,11 @@
+{
+  "name": "unity-package-shared-workflows",
+  "private": true,
+  "description": "Shared GitHub Actions workflow for releasing and publishing Greyborn Unity Package Manager (UPM) packages.",
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,21 @@
+# Releases and publishes this package when changes are pushed to main.
+# The release steps are defined in Greyborn/UnityPackageSharedWorkflows.
+
+name: 📦 Release and Publish
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    uses: Greyborn/UnityPackageSharedWorkflows/.github/workflows/upm-release.yml@v1
+    with:
+      registry: ${{ vars.VERDACCIO_REGISTRY }}
+      registry_username: ${{ vars.VERDACCIO_USERNAME }}
+    secrets:
+      registry_password: ${{ secrets.VERDACCIO_PASSWORD }}

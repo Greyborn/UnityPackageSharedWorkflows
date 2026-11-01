@@ -1,0 +1,32 @@
+name: UPM Version
+description: >-
+  Determines the next version of a UPM package from its Conventional Commits. When a release
+  is needed, bumps package.json, regenerates CHANGELOG.md and README.md, updates AssemblyInfo.cs
+  versions, then commits, tags, and pushes the release.
+
+outputs:
+  released:
+    description: '"true" if a new version was released; otherwise "false".'
+    value: ${{ steps.changelog.outputs.skipped == 'false' }}
+  version:
+    description: The released version, such as 1.2.3.
+    value: ${{ steps.changelog.outputs.version }}
+  tag:
+    description: The release tag, such as v1.2.3.
+    value: ${{ steps.changelog.outputs.tag }}
+  notes:
+    description: The changelog entry for the released version, without its heading.
+    value: ${{ steps.changelog.outputs.clean_changelog }}
+
+runs:
+  using: composite
+  steps:
+    - name: Bump version, update changelog, commit, and tag
+      id: changelog
+      uses: TriPSs/conventional-changelog-action@v6.5.0
+      with:
+        github-token: ${{ github.token }}
+        preset: conventionalcommits
+        release-count: '0'
+        version-file: ./package.json
+        pre-commit: ${{ github.action_path }}/pre-commit.js

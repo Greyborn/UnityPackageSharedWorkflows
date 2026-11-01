@@ -1,0 +1,89 @@
+# Releases and publishes a Greyborn UPM package. Called from each package
+# repository's own workflow; see README.md for the caller workflow.
+#
+# RELEASE
+#   Commit messages since the last release tag are examined using Conventional
+#   Commits syntax. `feat`, `fix`, and breaking changes trigger a release; all
+#   other types are ignored. When a release is needed, the version in
+#   package.json is bumped, CHANGELOG.md and README.md are regenerated, the
+#   AssemblyFileVersion in AssemblyInfo.cs files is updated, the changes are
+#   committed, tagged, and pushed, and a GitHub release is created.
+#
+# PUBLISH
+#   If a release was created, the release commit is published to the package
+#   registry.
+
+name: UPM Release
+
+on:
+  workflow_call:
+    inputs:
+      registry:
+        description: URL of the npm registry the package is published to.
+        required: true
+        type: string
+      registry_username:
+        description: Name of the registry account used to publish the package.
+        required: true
+        type: string
+    secrets:
+      registry_password:
+        description: Password of the registry account used to publish the package.
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Release and publish
+    runs-on: ubuntu-24.04
+    concurrency:
+      group: upm-release-${{ github.repository }}
+      cancel-in-progress: false
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Release
+        id: version
+        uses: Greyborn/UnityPackageSharedWorkflows/actions/upm-version@v1
+
+      - name: Create GitHub release
+        if: steps.version.outputs.released == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          NOTES: ${{ steps.version.outputs.notes }}
+        run: gh release create "$TAG" --title "$TAG" --notes "$NOTES" --verify-tag
+
+      - name: Set up Node.js
+        if: steps.version.outputs.released == 'true'
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          registry-url: ${{ inputs.registry }}
+
+      - name: Publish package
+        if: steps.version.outputs.released == 'true'
+        env:
+          REGISTRY: ${{ inputs.registry }}
+          REGISTRY_USERNAME: ${{ inputs.registry_username }}
+          REGISTRY_PASSWORD: ${{ secrets.registry_password }}
+        run: |
+          # Log in through the registry's npm user API, which returns an auth token.
+          token=$(jq -n --arg name "$REGISTRY_USERNAME" --arg password "$REGISTRY_PASSWORD" '{name: $name, password: $password}' \
+            | curl --fail --silent --show-error --request PUT --header 'Content-Type: application/json' --data @- \
+                "${REGISTRY%/}/-/user/org.couchdb.user:${REGISTRY_USERNAME}" \
+            | jq -r '.token // empty')
+
+          if [ -z "$token" ]; then
+            echo "::error::Logging in to $REGISTRY as $REGISTRY_USERNAME did not return a token."
+            exit 1
+          fi
+          echo "::add-mask::$token"
+
+          NODE_AUTH_TOKEN="$token" npm publish --registry "$REGISTRY"
