@@ -3,7 +3,26 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { test } = require('node:test');
 
-const { formatChangelog } = require('../actions/upm-version/lib/changelog');
+const { formatChangelog, formatReleaseNotes } = require('../actions/upm-version/lib/changelog');
+
+// A breaking-change note as conventional-changelog writes it: the commit body's
+// wrapping is kept, and the trailer at the end of the commit message is included.
+const WRAPPED_NOTE_UPSTREAM = [
+	'## [3.0.0](https://github.com/example/package-a/compare/v2.0.1...v3.0.0) (2026-11-02)',
+	'',
+	'',
+	'### ⚠ BREAKING CHANGES',
+	'',
+	'* Package renamed from com.example.old to',
+	'com.example.new, with namespace Example.New.',
+	'',
+	'Co-Authored-By: Someone <someone@example.com>',
+	'',
+	'### Features',
+	'',
+	'* replace the old API ([55b6a04](https://github.com/example/package-a/commit/55b6a04))',
+	'',
+].join('\n');
 
 const fixture = (name) => fs.readFileSync(path.join(__dirname, 'fixtures', name), 'utf8');
 
@@ -33,6 +52,36 @@ test('converts release dates and list markers', () => {
 	assert.match(formatted, /^## \[1\.0\.0\]\(https:\/\/example\.com\) — 2026-01-02$/m);
 	assert.match(formatted, /^- thing$/m);
 	assert.match(formatted, /^ {2}- nested$/m);
+});
+
+test('joins wrapped list items and removes git trailers', () => {
+	const formatted = formatChangelog(WRAPPED_NOTE_UPSTREAM);
+
+	assert.match(formatted, /^- Package renamed from com\.example\.old to com\.example\.new, with namespace Example\.New\.$/m);
+	assert.doesNotMatch(formatted, /Co-Authored-By/i);
+	assert.match(formatted, /— 2026-11-02\n\n### ⚠ BREAKING CHANGES\n\n- Package renamed .+\n\n### Features\n\n- replace the old API/);
+	assert.equal(formatChangelog(formatted), formatted);
+});
+
+test('formats release notes without the changelog header or release spacing', () => {
+	const notes = [
+		'### ⚠ BREAKING CHANGES',
+		'',
+		'* Package renamed from com.example.old to',
+		'com.example.new.',
+		'',
+		'Co-Authored-By: Someone <someone@example.com>',
+		'',
+		'### Features',
+		'',
+		'* replace the old API',
+		'',
+	].join('\n');
+
+	assert.equal(
+		formatReleaseNotes(notes),
+		'### ⚠ BREAKING CHANGES\n\n- Package renamed from com.example.old to com.example.new.\n\n### Features\n\n- replace the old API',
+	);
 });
 
 test('handles Windows line endings', () => {
