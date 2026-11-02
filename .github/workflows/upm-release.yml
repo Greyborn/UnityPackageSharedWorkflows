@@ -62,6 +62,13 @@ jobs:
           NOTES: ${{ steps.version.outputs.notes }}
         run: gh release create "$TAG" --title "$TAG" --notes "$NOTES" --verify-tag
 
+      # When no release is needed, the changelog action still writes the next
+      # version into package.json before deciding to skip, and leaves that
+      # change uncommitted. Discard it so the committed version is published.
+      - name: Discard changes from a skipped release
+        if: steps.version.outputs.released != 'true'
+        run: git reset --hard HEAD
+
       - name: Set up Node.js
         uses: actions/setup-node@v5
         with:
@@ -74,6 +81,13 @@ jobs:
           REGISTRY_USERNAME: ${{ inputs.registry_username }}
           REGISTRY_PASSWORD: ${{ secrets.registry_password }}
         run: |
+          # Only publish exactly what is committed.
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::The working tree has uncommitted changes; refusing to publish."
+            git status --short
+            exit 1
+          fi
+
           name=$(jq -r .name package.json)
           version=$(jq -r .version package.json)
 
