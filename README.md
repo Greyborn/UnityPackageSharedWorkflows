@@ -6,9 +6,9 @@ Shared GitHub Actions workflow for releasing and publishing Greyborn Unity Packa
 
 ## UPM Release
 
-`.github/workflows/upm-release.yml` releases and publishes a Unity Package Manager (UPM) package. On each push to `main` it:
+`.github/workflows/upm-release.yml` releases and publishes a Unity Package Manager (UPM) package. Pushing to `main` doesn't release anything; a release happens only when someone chooses **Run workflow** on the package's Actions tab. Each run:
 
-1. Looks at the commit messages since the last `v*` tag, using [Conventional Commits](https://www.conventionalcommits.org/). `feat` commits trigger a minor release, `fix` commits a patch release, and breaking changes (`feat!:`, or a `BREAKING CHANGE:` footer) a major release. Other commit types don't trigger a release.
+1. Looks at all commit messages since the last `v*` tag, using [Conventional Commits](https://www.conventionalcommits.org/), and picks one version bump for the release from the most significant change: a major bump if any commit is a breaking change (`feat!:`, or a `BREAKING CHANGE:` footer), otherwise a minor bump if any commit is a `feat`, otherwise a patch bump if any commit is a `fix`. If there are only other commit types, there is nothing to release. For example, `1.0.0` followed by fix, feat, breaking change, and fix commits is released as `2.0.0`.
 2. When a release is needed:
    - bumps `version` in `package.json`,
    - regenerates `CHANGELOG.md` from the full commit history,
@@ -18,9 +18,11 @@ Shared GitHub Actions workflow for releasing and publishing Greyborn Unity Packa
    - creates a GitHub release with the changelog entry.
 3. Publishes the version in `package.json` if the registry doesn't have it yet.
 
-If publishing fails after a release was created, fix the cause and use **Run workflow** on the package's Actions tab. The release is already committed and tagged, so that run only publishes it.
+If publishing fails after a release was created, fix the cause and choose **Run workflow** again. The release is already committed and tagged, so that run only publishes it.
 
 Never set `version` in `package.json` by hand; the workflow derives it from the commits.
+
+When one package depends on a new version of another, release the dependency first. A package that requires an unreleased version can't be installed from the registry, even though it works in a project where both packages are embedded.
 
 
 ### Using it in a package
