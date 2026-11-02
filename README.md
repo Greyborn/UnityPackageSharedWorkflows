@@ -15,8 +15,10 @@ Shared GitHub Actions workflow for releasing and publishing Greyborn Unity Packa
    - sets `AssemblyFileVersion` in every `AssemblyInfo.cs` and `*.AssemblyInfo.cs` file,
    - regenerates `README.md` from the package's README template,
    - commits the changes as `chore(release): vX.Y.Z [skip ci]`, tags the commit, and pushes both,
-   - creates a GitHub release with the changelog entry,
-   - publishes the package to the registry.
+   - creates a GitHub release with the changelog entry.
+3. Publishes the version in `package.json` if the registry doesn't have it yet.
+
+If publishing fails after a release was created, fix the cause and use **Run workflow** on the package's Actions tab. The release is already committed and tagged, so that run only publishes it.
 
 Never set `version` in `package.json` by hand; the workflow derives it from the commits.
 

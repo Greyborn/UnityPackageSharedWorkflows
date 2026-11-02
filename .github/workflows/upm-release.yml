@@ -10,8 +10,10 @@
 #   committed, tagged, and pushed, and a GitHub release is created.
 #
 # PUBLISH
-#   If a release was created, the release commit is published to the package
-#   registry.
+#   If the registry doesn't have the version in package.json yet, that version
+#   is published. This normally happens right after a release, but it also lets
+#   a release whose publish step failed be published by running the workflow
+#   again, without a new commit.
 
 name: UPM Release
 
@@ -61,22 +63,28 @@ jobs:
         run: gh release create "$TAG" --title "$TAG" --notes "$NOTES" --verify-tag
 
       - name: Set up Node.js
-        if: steps.version.outputs.released == 'true'
         uses: actions/setup-node@v5
         with:
           node-version: 24
           registry-url: ${{ inputs.registry }}
 
       - name: Publish package
-        if: steps.version.outputs.released == 'true'
         env:
           REGISTRY: ${{ inputs.registry }}
           REGISTRY_USERNAME: ${{ inputs.registry_username }}
           REGISTRY_PASSWORD: ${{ secrets.registry_password }}
         run: |
+          name=$(jq -r .name package.json)
+          version=$(jq -r .version package.json)
+
           # Log in through the registry's npm user API, which returns an auth token.
+          # Verdaccio only logs in an existing user when the request is also
+          # authenticated with that user's name and password (HTTP Basic);
+          # otherwise it tries to create the user and fails with 409 Conflict.
           token=$(jq -n --arg name "$REGISTRY_USERNAME" --arg password "$REGISTRY_PASSWORD" '{name: $name, password: $password}' \
-            | curl --fail --silent --show-error --request PUT --header 'Content-Type: application/json' --data @- \
+            | curl --fail --silent --show-error --request PUT \
+                --user "$REGISTRY_USERNAME:$REGISTRY_PASSWORD" \
+                --header 'Content-Type: application/json' --data @- \
                 "${REGISTRY%/}/-/user/org.couchdb.user:${REGISTRY_USERNAME}" \
             | jq -r '.token // empty')
 
@@ -85,5 +93,12 @@ jobs:
             exit 1
           fi
           echo "::add-mask::$token"
+          export NODE_AUTH_TOKEN="$token"
 
-          NODE_AUTH_TOKEN="$token" npm publish --registry "$REGISTRY"
+          published=$(npm view "$name@$version" version --registry "$REGISTRY" 2>/dev/null || true)
+          if [ "$published" = "$version" ]; then
+            echo "$name@$version is already published; nothing to do."
+            exit 0
+          fi
+
+          npm publish --registry "$REGISTRY"
